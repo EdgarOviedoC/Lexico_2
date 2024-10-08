@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
+using System.Runtime.ConstrainedExecution;
+using System.Runtime.InteropServices;
 
 namespace Lexico_2
 {
@@ -12,6 +14,8 @@ namespace Lexico_2
         StreamWriter log;
         StreamWriter asm;
         int line = 1;
+        const int F = -1;
+        const int E = -2;
 
         //Constructor de la clase lexico
         public Lexico()
@@ -67,11 +71,148 @@ namespace Lexico_2
             archivo.Close();
             asm.Close();
         }
+        private int automata(char c, int estado)
+        {
+            int nuevoEstado = estado;
 
+            switch (estado)
+            {
+                case 0:
+                    if (char.IsWhiteSpace(c))
+                    {
+                        nuevoEstado = 0;
+                    }
+                    else if (char.IsLetter(c))
+                    {
+                        nuevoEstado = 1;
+                    }
+                    else if (char.IsDigit(c))
+                    {
+                        nuevoEstado = 2;
+                    }
+                    else
+                    {
+                        nuevoEstado = 8;
+                    }
+                    break;
+                case 1:
+                    setClasificacion(Tipos.Identificador);
+                    if (!(char.IsLetterOrDigit(c)))
+                    {
+                        nuevoEstado = F;
+                    }
+                    break;
+                case 2:
+                    setClasificacion(Tipos.Numero);
+                    if (char.IsDigit(c))
+                    {
+                        nuevoEstado = 2;
+                    }
+                    else if (c == '.')
+                    {
+                        nuevoEstado = 3;
+                    }
+                    else if (char.ToLower(c) == 'e')
+                    {
+                        nuevoEstado = 5;
+                    }
+                    else
+                    {
+                        nuevoEstado = F;
+                    }
+                    break;
+                case 3:
+                    if (char.IsDigit(c))
+                    {
+                        nuevoEstado = 4;
+                    }
+                    else
+                    {
+                        nuevoEstado = E;
+                    }
+                    break;
+                case 4:
+                    if (char.IsDigit(c))
+                    {
+                        nuevoEstado = 4;
+                    }
+                    else if (char.ToLower(c) == 'e')
+                    {
+                        nuevoEstado = 5;
+                    }
+                    else
+                    {
+                        nuevoEstado = F;
+                    }
+                    break;
+                case 5:
+                    if (c == '+' || c == '-')
+                    {
+                        nuevoEstado = 6;
+                    }
+                    else if (char.IsDigit(c))
+                    {
+                        nuevoEstado = 7;
+                    }
+                    else
+                    {
+                        nuevoEstado = E;
+                    }
+                    break;
+                case 6:
+                    if (char.IsDigit(c))
+                    {
+                        nuevoEstado = 7;
+                    }
+                    else
+                    {
+                        nuevoEstado = E;
+                    }
+                    break;
+                case 7:
+                    nuevoEstado = 7;
+                    if (!(char.IsDigit(c)))
+                    {
+                        nuevoEstado = F;
+                    }
+                    break;
+                case 8:
+                    nuevoEstado = F;
+                    break;
+            }
+            return nuevoEstado;
+        }
         public void nexToken()
         {
-            char c;
+            char transicion;
             string Buffer = "";
+            int estado = 0;
+
+            while (estado > 0)
+            {
+                transicion = (char)archivo.Peek();
+                estado = automata(transicion, estado);
+                if (estado == E)
+                {
+                    if (getClasificacion() == Tipos.Numero)
+                    {
+                        throw new Error("Lexico, se espera un digito", log, line);
+                    }
+                }
+                if (estado >= 0)
+                {
+                    archivo.Read();
+                    if (transicion == '\n')
+                    {
+                        line++;
+                    }
+                    if (estado > 0)
+                    {
+                        Buffer += transicion;
+                    }
+                }
+
+            }
 
             if (!finArchivo())
             {
@@ -136,25 +277,43 @@ namespace Lexico_2
 
         Identificador -> L (L | D)* 
 
-        Numero -> 
+        Numero -> D+ (.D+)? (E(+ | -)? D+)?
         
-        FinSentencia -> 
-        InicioBloque -> 
-        FinBloque -> 
-        OperadorTernario -> 
-        OperadorTermino -> 
-        OperadorFactor -> 
-        IncrementoTermino -> 
-        IncrementoFactor -> 
-        OperadorRelacional -> 
-        OperadorLogico -> 
-        Puntero -> 
-        Asignacion -> 
-        Moneda -> 
-        Cadena -> 
+        FinSentencia -> ;
+        InicioBloque -> {
+        FinBloque -> }
+        OperadorTernario -> ?
+
+        Puntero -> ->
+
+        OperadorTermino -> + | -
+        IncrementoTermino -> + (+ | =) | - (- | =)
+
+        Termino + -> + (+ | =)?
+        Termino - -> - (- | = | >)?
+
+        OperadorFactor -> * | / | %
+        IncrementoFactor -> *= | /= | %=
+
+        Factor -> * | / | % (=)?
+ 
+        OperadorLogico -> && | || | !
+
+        NotOpRel -> ! (=)?
+        
+        Asignacion -> =
+
+        AsigOpRel -> = (=)?
+
+        OperadorRelacional -> > (=) ? | < (> | =)? | == | !=
+
+        Cadena -> "c*"
+        Caracter -> 'c' | #D* | lamda
 
     Automata: Modelo matematico que representa una expresion regular a travez de 
     un GRAFO, para una maquina de estado finito que consiste en un conjunto de 
-    estados bien definidos, un estado inicial, un alfabeto de entrada y una funcion 
-    de transición
+    estados bien definidos: 
+        - Un estado inicial
+        - Un alfabeto de entrada
+        - Una funcion de transición
 */
